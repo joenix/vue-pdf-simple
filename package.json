@@ -1,12 +1,13 @@
 {
   "name": "vue-pdf-simple",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "main": "index.js",
   "license": "MIT",
   "dependencies": {
     "@panzoom/panzoom": "^4.6.0",
     "deepmerge": "^4.3.1",
     "is-plain-object": "^5.0.0",
+    "noop.js": "^0.0.7",
     "pdfjs-dist": "^5.3.31",
     "vue-view-observer": "^1.0.12"
   }

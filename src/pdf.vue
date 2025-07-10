@@ -130,7 +130,7 @@
 <template>
   <div class="vps" :style="{ ...style }">
     <!-- Tools -->
-    <div class="vps-tools">
+    <div class="vps-tools" v-if="tool">
       <!-- Page -->
       <div class="vps-tools-page">
         <div class="vps-tools-prev" @click="prev">«</div>
@@ -147,6 +147,9 @@
 
     <!-- Container -->
     <div class="vps-container" ref="container">
+      <div class="vps-loading" v-if="status === 'loading'">
+        <slot name="loading"></slot>
+      </div>
       <div class="vps-wrapper" ref="wrapper">
         <div class="vps-target" ref="target">
           <vue-view-observer class="vps-page" v-for="{ key } in PDFs" :key="key" :data-key="key" container=".vps-container" :full="true" @subscribe="onSubscribe">
@@ -173,11 +176,16 @@ import { getDocument, GlobalWorkerOptions, Util } from 'pdfjs-dist';
 import worker from 'pdfjs-dist/build/pdf.worker?url';
 GlobalWorkerOptions.workerSrc = worker;
 
+// Set Noop
+import { noop } from 'noop.js';
+
 // As Component
 export default {
   components: {
     vueViewObserver
   },
+
+  emits: ['update:status'],
 
   props: {
     visible: {
@@ -188,6 +196,11 @@ export default {
     src: {
       type: String,
       default: ''
+    },
+
+    tool: {
+      type: Boolean,
+      default: true
     },
 
     width: {
@@ -218,12 +231,11 @@ export default {
 
   data() {
     return {
+      status: 'idle',
       PDFs: [],
       total: 0,
       current: 1,
       zoom: 100,
-
-      // 缩放对象
       panzoom: null
     };
   },
@@ -243,6 +255,10 @@ export default {
   },
 
   watch: {
+    status(value) {
+      this.$emit('update:status', value);
+    },
+
     visible: {
       handler(value) {
         if (value === false) {
@@ -327,8 +343,50 @@ export default {
       });
     },
 
-    async load(url) {
+    async loader(url) {
       return await getDocument({ url, withCredentials: false }).promise;
+    },
+
+    async load(url, { withCredentials = false, onCallback = noop } = {}) {
+      // Set PDF as Result
+      var pdf = null;
+
+      // Use Try
+      try {
+        // Step 1. Loading
+        await onCallback((this.status = 'loading'));
+        pdf = await getDocument({ url, withCredentials }).promise;
+
+        // Step 2. Success
+        await onCallback((this.status = 'success'), pdf);
+      } catch (error) {
+        // Step 3. Error
+        await onCallback((this.status = 'error'), this.getPDFErrorMessage(error));
+      }
+
+      // Next
+      return pdf;
+    },
+
+    // 用于解析常见错误的提示文本
+    getPDFErrorMessage({ message = '' }) {
+      if (message.includes('Missing PDF')) {
+        return '找不到 PDF 文件';
+      }
+
+      if (message.includes('Invalid PDF')) {
+        return '无效的 PDF 文件';
+      }
+
+      if (message.includes('Unexpected server response')) {
+        return '网络异常';
+      }
+
+      if (message.includes('Password')) {
+        return '该 PDF 为加密文件，暂不支持打开';
+      }
+
+      return 'PDF 加载异常，请稍微重试';
     },
 
     async recursion(group, callback, result = []) {
